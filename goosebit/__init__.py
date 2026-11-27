@@ -19,6 +19,7 @@ from goosebit.auth import (
     login_user,
     permissions,
     redirect_if_authenticated,
+    redirect_if_users_exist,
 )
 from goosebit.device_manager import DeviceManager
 from goosebit.settings import PWD_CXT, config  # type: ignore[attr-defined]
@@ -142,12 +143,13 @@ async def login_post(form_data: Annotated[OAuth2PasswordRequestForm, Depends()])
     return {"access_token": await login_user(form_data.username, form_data.password), "token_type": "bearer"}
 
 
-@app.get("/setup", include_in_schema=False)
+# Setup is only allowed while no user exists, otherwise anyone could create an admin account
+@app.get("/setup", include_in_schema=False, dependencies=[Depends(redirect_if_users_exist)])
 async def setup_get(request: Request) -> Response:
     return templates.TemplateResponse(request, "setup.html.jinja")
 
 
-@app.post("/setup", include_in_schema=False)
+@app.post("/setup", include_in_schema=False, dependencies=[Depends(redirect_if_users_exist)])
 async def setup_post(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) -> dict[str, str]:
     await create_initial_user(form_data.username, PWD_CXT.hash(form_data.password))
     return {"access_token": await login_user(form_data.username, form_data.password), "token_type": "bearer"}
