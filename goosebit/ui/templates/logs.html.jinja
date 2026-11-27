@@ -26,6 +26,6 @@
             </div>
         </div>
     </div>
-    <script>device = "{{ device }}";</script>
+    <script>device = {{ device | tojson }};</script>
     <script src="{{ url_for('static', path='js/logs.js') }}"></script>
 {% endblock content %}
