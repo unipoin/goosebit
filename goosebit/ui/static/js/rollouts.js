@@ -229,9 +229,10 @@ async function createRollout() {
     const name = document.getElementById("rollout-selected-name").value;
     const feed = document.getElementById("rollout-selected-feed").value;
     const software_id = document.getElementById("selected-sw").value;
+    const paused = document.getElementById("rollout-selected-paused").checked;
 
     try {
-        await put_request("/ui/bff/rollouts", { name, feed, software_id });
+        await put_request("/ui/bff/rollouts", { name, feed, software_id, paused });
     } catch (error) {
         console.error("Rollout creation failed:", error);
     }
