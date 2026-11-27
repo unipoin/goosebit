@@ -6,12 +6,9 @@
 
 FROM python:3.13.7-alpine@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844 AS builder
 
-ARG POETRY_VERSION=2.5.2
-ARG POETRY_PLUGIN_EXPORT_VERSION=1.10.2
-
-RUN pip install --no-cache-dir \
-        "poetry==${POETRY_VERSION}" \
-        "poetry-plugin-export==${POETRY_PLUGIN_EXPORT_VERSION}"
+# Build tooling with all transitive dependencies, every package checked against its hash
+COPY .github/unipoin/requirements-build.txt /tmp/requirements-build.txt
+RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements-build.txt
 
 WORKDIR /src
 

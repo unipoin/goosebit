@@ -76,7 +76,8 @@ jobs:
           context: .
           file: docker/unipoin.dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          provenance: mode=max
+          # Minimal provenance: no build arguments or event payload in the published attestation
+          provenance: mode=min
           sbom: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
