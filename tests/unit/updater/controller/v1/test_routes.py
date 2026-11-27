@@ -1,9 +1,11 @@
+from datetime import UTC, datetime
 from typing import Any, Dict
+from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
 
-from goosebit.db.models import Device, Hardware, Software
+from goosebit.db.models import Device, Hardware, Rollout, Software, UpdateStateEnum
 from goosebit.device_manager import DeviceManager, get_device
 from goosebit.settings import config
 
@@ -134,6 +136,22 @@ async def _feedback(
                 "result": {"finished": finished},
                 "execution": execution,
                 "details": [details],
+            },
+        },
+    )
+    assert response.status_code == 200
+
+
+async def _cancel_feedback(async_client: AsyncClient, device_id: str, action_id: int) -> None:
+    # what swupdate sends to acknowledge a cancel
+    response = await async_client.post(
+        f"/DEFAULT/controller/v1/{device_id}/cancelAction/{action_id}/feedback",
+        json={
+            "id": action_id,
+            "status": {
+                "result": {"finished": "success"},
+                "execution": "closed",
+                "details": ["cancellation acknowledged."],
             },
         },
     )
@@ -308,7 +326,8 @@ async def _assert_log_lines(async_client: AsyncClient, device: Device, expected_
     assert response.status_code == 200
 
     log = response.json()["log"]
-    if log is None:
+    # a claim resets last_log to "" (previously NULL until first feedback)
+    if not log:
         assert expected_line_count == 0
     else:
         actual_line_count = log.count("\n")
@@ -332,8 +351,11 @@ async def test_update_logs_and_progress(async_client: AsyncClient, test_data: Di
     await _retrieve_software_url(async_client, device.id, deployment_base, software)
 
     # confirm installation start (in reality: several of similar posts)
-    await _feedback(async_client, device.id, software, "none", "proceeding", "Downloaded 7%")
-    await _assert_log_lines(async_client, device, 1)
+    with patch("goosebit.device_manager.datetime") as mock_datetime:
+        mock_datetime.now.return_value = datetime(2026, 10, 21, 13, 2, 11, tzinfo=UTC)
+        await _feedback(async_client, device.id, software, "none", "proceeding", "Downloaded 7%")
+    log = (await async_client.get(f"/ui/bff/devices/{device.id}/log")).json()["log"]
+    assert log == "[2026-10-21T13:02:11+00:00] Downloaded 7%\n"
     device_api = await _api_device_get(async_client, device.id)
     assert device_api["last_state"] == "Running"
     assert device_api["progress"] == 7
@@ -353,3 +375,171 @@ async def test_update_logs_and_progress(async_client: AsyncClient, test_data: Di
     # fake installation start confirmation to check clearing of logs
     await _feedback(async_client, device.id, software, "none", "proceeding", "Downloaded 1%")
     await _assert_log_lines(async_client, device, 1)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_update_cap(
+    async_client: AsyncClient, test_data: Dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config, "max_concurrent_updates", 1)
+
+    device1 = test_data["device_rollout"]
+    device2 = test_data["device_assigned"]
+    software = test_data["software_release"]
+
+    # first device claims the only slot (reserved at hand-out, before the install starts)
+    await _poll(async_client, device1.id, software)
+    device_api = await _api_device_get(async_client, device1.id)
+    assert device_api["last_state"] == "Reserved"
+
+    # cap exhausted: no link for the second device
+    await _poll(async_client, device2.id, software, expect_update=False)
+
+    # the reserved device keeps receiving its link on subsequent polls
+    await _poll(async_client, device1.id, software)
+
+    # first device finishes, freeing the slot
+    await _feedback(async_client, device1.id, software, "success", "closed")
+
+    # second device now gets the link
+    await _poll(async_client, device2.id, software)
+
+
+@pytest.mark.asyncio
+async def test_running_device_keeps_slot_when_cap_exhausted(
+    async_client: AsyncClient, test_data: Dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config, "max_concurrent_updates", 1)
+
+    device1 = test_data["device_rollout"]
+    device2 = test_data["device_assigned"]
+    software = test_data["software_release"]
+
+    # device1 already occupies the single slot
+    device1 = await get_device(dev_id=device1.id)
+    await DeviceManager.update_device_state(device1, UpdateStateEnum.RUNNING)
+
+    # cap is exhausted for a fresh claim
+    await _poll(async_client, device2.id, software, expect_update=False)
+
+    # running device keeps receiving the link
+    await _poll(async_client, device1.id, software)
+
+
+@pytest.mark.asyncio
+async def test_claim_reserves_and_proceeding_resets(async_client: AsyncClient, test_data: Dict[str, Any]) -> None:
+    device = test_data["device_rollout"]
+    software = test_data["software_release"]
+
+    # stale bookkeeping from a previous update
+    device.last_log = "stale log entry\n"
+    device.progress = 50
+    await device.save(update_fields=["last_log", "progress"])
+
+    # claiming only reserves the slot; bookkeeping is left untouched until the install starts
+    await _poll(async_client, device.id, software)
+    await device.refresh_from_db()
+    assert device.last_state == UpdateStateEnum.RESERVED
+    assert device.last_log == "stale log entry\n"
+    assert device.progress == 50
+
+    # first proceeding feedback promotes to running and resets the stale bookkeeping
+    await _feedback(async_client, device.id, software, "none", "proceeding")
+    await device.refresh_from_db()
+    assert device.last_state == UpdateStateEnum.RUNNING
+    assert "stale log entry" not in (device.last_log or "")
+    assert device.progress == 0
+
+
+@pytest.mark.asyncio
+async def test_rollout_paused_during_update_cancels(async_client: AsyncClient, test_data: Dict[str, Any]) -> None:
+    device = test_data["device_rollout"]
+    software = test_data["software_release"]
+    rollout = test_data["rollout_default"]
+
+    await _poll(async_client, device.id, software)
+    await _feedback(async_client, device.id, software, "none", "proceeding")
+
+    response = await async_client.patch("/api/v1/rollouts", json={"ids": [rollout.id], "paused": True})
+    assert response.status_code == 200
+
+    # device is asked to cancel instead of losing its update
+    response = await async_client.get(f"/DEFAULT/controller/v1/{device.id}")
+    cancel_url = response.json()["_links"]["cancelAction"]["href"]
+    assert cancel_url == f"http://test/DEFAULT/controller/v1/{device.id}/cancelAction/0"
+
+    response = await async_client.get(cancel_url)
+    assert response.status_code == 200
+    assert response.json() == {"id": "0", "cancelAction": {"stopId": "0"}}
+
+    await _cancel_feedback(async_client, device.id, 0)
+    device_api = await _api_device_get(async_client, device.id)
+    assert device_api["last_state"] == "Canceled"
+
+    # slot is released: no more cancel links, and the update comes back once resumed
+    await _poll(async_client, device.id, None, expect_update=False)
+    response = await async_client.patch("/api/v1/rollouts", json={"ids": [rollout.id], "paused": False})
+    assert response.status_code == 200
+    await _poll(async_client, device.id, software)
+
+
+@pytest.mark.asyncio
+async def test_rollout_paused_with_older_rollout_cancels(async_client: AsyncClient, test_data: Dict[str, Any]) -> None:
+    device = test_data["device_rollout"]
+    software = test_data["software_rc"]
+
+    # device already runs the default rollout's software, a newer rollout brings rc
+    device.sw_version = test_data["software_release"].version
+    await device.save(update_fields=["sw_version"])
+    rollout = await Rollout.create(software_id=software.id)
+
+    await _poll(async_client, device.id, software)
+    await _feedback(async_client, device.id, software, "none", "proceeding")
+
+    response = await async_client.patch("/api/v1/rollouts", json={"ids": [rollout.id], "paused": True})
+    assert response.status_code == 200
+
+    # fallback to the older rollout has nothing to install, so the device is asked to cancel
+    response = await async_client.get(f"/DEFAULT/controller/v1/{device.id}")
+    assert response.json()["_links"] == {
+        "cancelAction": {"href": f"http://test/DEFAULT/controller/v1/{device.id}/cancelAction/0"}
+    }
+
+
+@pytest.mark.asyncio
+async def test_cancel_feedback_without_update_is_ignored(async_client: AsyncClient, test_data: Dict[str, Any]) -> None:
+    device = await get_device(dev_id=test_data["device_rollout"].id)
+    await DeviceManager.update_device_state(device, UpdateStateEnum.ERROR)
+
+    await _cancel_feedback(async_client, device.id, 0)
+
+    device_api = await _api_device_get(async_client, device.id)
+    assert device_api["last_state"] == "Error"
+
+
+@pytest.mark.asyncio
+async def test_rollout_resumed_after_cancel_skips_installed_version(
+    async_client: AsyncClient, test_data: Dict[str, Any]
+) -> None:
+    device = test_data["device_rollout"]
+    software = test_data["software_release"]
+    rollout = test_data["rollout_default"]
+
+    await _poll(async_client, device.id, software)
+    await _feedback(async_client, device.id, software, "none", "proceeding", "All Chunks Installed.")
+
+    # paused while the device reboots into the new version: swupdate acks the cancel instead of confirming
+    response = await async_client.patch("/api/v1/rollouts", json={"ids": [rollout.id], "paused": True})
+    assert response.status_code == 200
+    await _cancel_feedback(async_client, device.id, 0)
+
+    # swupdate sends configData on every startup, reporting the version it now runs
+    response = await async_client.put(
+        f"/DEFAULT/controller/v1/{device.id}/configData", json={"data": {"sw_version": software.version}}
+    )
+    assert response.status_code == 200
+
+    # resuming doesn't hand out the already running version again
+    response = await async_client.patch("/api/v1/rollouts", json={"ids": [rollout.id], "paused": False})
+    assert response.status_code == 200
+    await _poll(async_client, device.id, None, expect_update=False)

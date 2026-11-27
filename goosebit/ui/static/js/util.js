@@ -2,6 +2,7 @@
 DataTable.type("num", "className", "");
 DataTable.type("date", "className", "");
 DataTable.type("datetime", "className", "");
+DataTable.defaults.lengthMenu = [10, 25, 50, 100, { label: "All", value: -1 }];
 
 function secondsToRecentDate(t) {
     if (t == null) {
@@ -14,26 +15,30 @@ function secondsToRecentDate(t) {
     const s = Math.floor(((time % 86400) % 3600) % 60);
 
     if (d > 0) {
-        return d + (d === 1 ? " day" : " days");
+        return `${d}d`;
     }
     if (h > 0) {
-        return h + (h === 1 ? " hour" : " hours");
+        return `${h}h`;
     }
     if (m > 0) {
-        return m + (m === 1 ? " minute" : " minutes");
+        return `${m}m`;
     }
-    return s + (s === 1 ? " second" : " seconds");
+    return `${s}s`;
 }
 
 async function updateSoftwareSelection(devices = null) {
     try {
-        const url = new URL("/ui/bff/software?order[0][dir]=desc&order[0][name]=version", window.location.origin);
+        const url = new URL("/ui/bff/software", window.location.origin);
         if (devices != null) {
             for (const device of devices) {
                 url.searchParams.append("ids", device.id);
             }
         }
-        const response = await fetch(url.toString());
+        const response = await fetch(url.toString(), {
+            method: "QUERY",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order: [{ name: "version", dir: "desc" }] }),
+        });
         if (!response.ok) {
             console.error("Retrieving software list failed.");
             return;
@@ -46,7 +51,11 @@ async function updateSoftwareSelection(devices = null) {
             const optionElem = document.createElement("option");
             optionElem.value = item.id;
             optionElem.textContent = `${item.version}`;
-            const models = [...new Set(item.compatibility.map((item) => item.model))];
+            const models = [
+                ...new Set(
+                    item.compatibility.map((item) => (item.revision ? `${item.model} - ${item.revision}` : item.model)),
+                ),
+            ];
             optionElem.textContent = `${item.version} (${models})`;
             selectElem.appendChild(optionElem);
         }

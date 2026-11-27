@@ -39,8 +39,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         stateSave: true,
         select: true,
         rowId: "username",
+        // Don't restore selection: Select matches row IDs as CSS selectors, and
+        // usernames may contain invalid chars (".", "@", ...) that abort table init.
+        stateLoadParams: (settings, data) => {
+            // biome-ignore lint/performance/noDelete: selection must not be restored
+            delete data.select;
+        },
         ajax: {
             url: "/ui/bff/settings/users",
+            method: "QUERY",
+            submitAs: "json",
             data: (data) => {
                 // biome-ignore lint/performance/noDelete: really has to be deleted
                 delete data.columns;
@@ -125,6 +133,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         })
         .on("deselect", () => {
             updateBtnState();
+        })
+        // Don't persist selection (see stateLoadParams above).
+        .on("stateSaveParams", (e, settings, data) => {
+            // biome-ignore lint/performance/noDelete: selection must not be persisted
+            delete data.select;
         });
 
     setInterval(() => {

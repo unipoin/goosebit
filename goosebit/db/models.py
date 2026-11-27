@@ -38,6 +38,8 @@ class UpdateStateEnum(IntEnum):
     RUNNING = 3
     ERROR = 4
     FINISHED = 5
+    RESERVED = 6
+    CANCELED = 7
 
     def __str__(self) -> str:
         return self.name.capitalize()
@@ -140,6 +142,7 @@ class SoftwareImageFormat(IntEnum):
 
 class Software(Model):  # type: ignore[misc]
     id = fields.IntField(primary_key=True)
+    created_at = fields.DatetimeField(auto_now_add=True, null=True)
     uri = fields.CharField(max_length=255)
     size = fields.BigIntField()
     hash = fields.CharField(max_length=255)

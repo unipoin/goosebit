@@ -1,6 +1,19 @@
 let dataTable;
 
 const renderFunctions = {
+    "software.compatibility": (data, type) => {
+        const result = data.reduce((acc, { model, revision }) => {
+            if (!acc[model]) {
+                acc[model] = [];
+            }
+            acc[model].push(revision);
+            return acc;
+        }, {});
+
+        return Object.entries(result)
+            .map(([model, revision]) => `${model} - ${revision.join(", ")}`)
+            .join("\n");
+    },
     paused: (data, type) => {
         if (type === "display") {
             const color = data ? "danger" : "muted";
@@ -42,7 +55,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         rowId: "id",
         ajax: {
             url: "/ui/bff/rollouts",
-            method: "POST",
+            method: "QUERY",
             submitAs: "json",
             contentType: "application/json",
         },

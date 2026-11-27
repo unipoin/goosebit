@@ -7,6 +7,12 @@ const uploadProgressBar = document.getElementById("upload-progress");
 let dataTable;
 
 const renderFunctions = {
+    created_at: (data, type) => {
+        if (type === "display" || type === "filter") {
+            return data ? new Date(data).toLocaleString() : "-";
+        }
+        return data;
+    },
     compatibility: (data, type) => {
         const result = data.reduce((acc, { model, revision }) => {
             if (!acc[model]) {
@@ -90,7 +96,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         stateSave: true,
         ajax: {
             url: "/ui/bff/software",
-            method: "POST",
+            method: "QUERY",
             submitAs: "json",
             contentType: "application/json",
         },

@@ -25,6 +25,11 @@ async def rollouts_get(dt_query: Annotated[DataTableRequest, Depends(parse_datat
     return await rollouts_post(dt_query)
 
 
+@router.api_route(
+    "",
+    methods=["QUERY"],
+    dependencies=[Security(validate_user_permissions, scopes=[GOOSEBIT_PERMISSIONS["rollout"]["read"]()])],
+)
 @router.post(
     "",
     dependencies=[Security(validate_user_permissions, scopes=[GOOSEBIT_PERMISSIONS["rollout"]["read"]()])],
@@ -86,6 +91,7 @@ async def devices_get_columns() -> DTColumns:
                 RolloutColumns.feed,
                 RolloutColumns.sw_file,
                 RolloutColumns.sw_version,
+                RolloutColumns.compatibility,
                 RolloutColumns.paused,
                 RolloutColumns.success_count,
                 RolloutColumns.failure_count,

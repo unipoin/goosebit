@@ -47,6 +47,15 @@ async def software_get(
     return await BFFSoftwareResponse.convert(dt_query, query, search_filter, Q(*filters))
 
 
+@router.api_route(
+    "",
+    methods=["QUERY"],
+    dependencies=[Security(validate_user_permissions, scopes=[GOOSEBIT_PERMISSIONS["software"]["read"]()])],
+)
+async def software_query(dt_query: DataTableRequest, ids: list[str] = Query(default=None)) -> BFFSoftwareResponse:
+    return await software_get(dt_query, ids)
+
+
 @router.post(
     "",
     dependencies=[Security(validate_user_permissions, scopes=[GOOSEBIT_PERMISSIONS["software"]["read"]()])],
@@ -131,6 +140,7 @@ async def devices_get_columns() -> DTColumns:
                 SoftwareColumns.version,
                 SoftwareColumns.compatibility,
                 SoftwareColumns.size,
+                SoftwareColumns.created_at,
             ],
         )
     )

@@ -55,12 +55,14 @@ class DeviceColumns:
         title="Update Mode",
         data="update_mode",
         name="update_mode",
+        searchable=True,
         orderable=True,
     )
     last_state = DTColumnDescription(
         title="State",
         data="last_state",
         name="last_state",
+        searchable=True,
         orderable=True,
     )
     force_update = DTColumnDescription(
@@ -134,6 +136,11 @@ class RolloutColumns:
         searchable=True,
         orderable=True,
     )
+    compatibility = DTColumnDescription(
+        title="Compatibility",
+        data="software.compatibility",
+        name="software__compatibility",
+    )
     paused = DTColumnDescription(
         title="Paused",
         name="paused",
@@ -183,6 +190,12 @@ class SoftwareColumns:
         title="Size",
         name="size",
         data="size",
+        orderable=True,
+    )
+    created_at = DTColumnDescription(
+        title="Uploaded",
+        data="created_at",
+        name="created_at",
         orderable=True,
     )
 
