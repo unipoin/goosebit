@@ -1,20 +1,29 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Annotated, Iterable
 
 from argon2.exceptions import VerifyMismatchError
 from fastapi import Depends, HTTPException
 from fastapi.requests import HTTPConnection, Request
+from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from joserfc import jwt
-from joserfc.errors import BadSignatureError
+from joserfc.errors import JoseError
 
 from goosebit.db.models import User
 from goosebit.settings import PWD_CXT, config  # type: ignore[attr-defined]
 from goosebit.users import UserManager
 
 logger = logging.getLogger(__name__)
+
+
+SESSION_COOKIE = "session_id"
+TOKEN_ALGORITHM = "HS256"
+
+# tokens without expiry (issued by older versions) are rejected
+_claims_registry = jwt.JWTClaimsRegistry(exp={"essential": True}, iat={"essential": True})
 
 
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
@@ -25,22 +34,41 @@ async def oauth2_auth(request: Request) -> str | None:
 
 
 async def session_auth(connection: HTTPConnection) -> str | None:
-    return connection.cookies.get("session_id")
+    return connection.cookies.get(SESSION_COOKIE)
 
 
 def create_token(username: str) -> str:
-    return jwt.encode(header={"alg": "HS256"}, claims={"username": username}, key=config.secret_key)
+    now = int(time.time())
+    claims = {"username": username, "iat": now, "exp": now + config.session_lifetime}
+    return jwt.encode(header={"alg": TOKEN_ALGORITHM}, claims=claims, key=config.secret_key)
 
 
 async def get_user_from_token(token: str | None) -> User | None:
     if token is None:
         return None
     try:
-        token_data = jwt.decode(token, config.secret_key)
+        token_data = jwt.decode(token, config.secret_key, algorithms=[TOKEN_ALGORITHM])
+        _claims_registry.validate(token_data.claims)
         username = token_data.claims["username"]
         return await UserManager.get_user(username)
-    except (BadSignatureError, LookupError, ValueError):
+    except (JoseError, LookupError, ValueError):
         return None
+
+
+def set_session_cookie(request: Request, response: Response, token: str) -> None:
+    # set by the server so the token is not readable by JavaScript (HttpOnly)
+    secure = config.session_cookie_secure
+    if secure is None:
+        secure = request.url.scheme == "https"
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        max_age=config.session_lifetime,
+        path="/",
+        secure=secure,
+        httponly=True,
+        samesite="lax",
+    )
 
 
 async def login_user(username: str, password: str) -> str:

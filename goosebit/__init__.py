@@ -15,11 +15,13 @@ from tortoise.exceptions import ValidationError
 
 from goosebit import api, db, plugins, ui, updater
 from goosebit.auth import (
+    SESSION_COOKIE,
     get_user_from_request,
     login_user,
     permissions,
     redirect_if_authenticated,
     redirect_if_users_exist,
+    set_session_cookie,
 )
 from goosebit.device_manager import DeviceManager
 from goosebit.settings import PWD_CXT, config  # type: ignore[attr-defined]
@@ -139,8 +141,12 @@ async def login_get(request: Request) -> Response:
 
 
 @app.post("/login", tags=["login"])
-async def login_post(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) -> dict[str, str]:
-    return {"access_token": await login_user(form_data.username, form_data.password), "token_type": "bearer"}
+async def login_post(
+    request: Request, response: Response, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+) -> dict[str, str]:
+    token = await login_user(form_data.username, form_data.password)
+    set_session_cookie(request, response, token)
+    return {"access_token": token, "token_type": "bearer"}
 
 
 # Setup is only allowed while no user exists, otherwise anyone could create an admin account
@@ -150,15 +156,19 @@ async def setup_get(request: Request) -> Response:
 
 
 @app.post("/setup", include_in_schema=False, dependencies=[Depends(redirect_if_users_exist)])
-async def setup_post(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) -> dict[str, str]:
+async def setup_post(
+    request: Request, response: Response, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+) -> dict[str, str]:
     await create_initial_user(form_data.username, PWD_CXT.hash(form_data.password))
-    return {"access_token": await login_user(form_data.username, form_data.password), "token_type": "bearer"}
+    token = await login_user(form_data.username, form_data.password)
+    set_session_cookie(request, response, token)
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @app.get("/logout", include_in_schema=False)
 async def logout(request: Request) -> RedirectResponse:
     resp = RedirectResponse(request.url_for("login_get"), status_code=302)
-    resp.delete_cookie(key="session_id")
+    resp.delete_cookie(key=SESSION_COOKIE, path="/", httponly=True, samesite="lax")
     return resp
 
 

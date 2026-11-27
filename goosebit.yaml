@@ -59,6 +59,13 @@ poll_time: 00:01:00
 # Defaults to a randomized value. If this value is not set, user sessions will not persist when app restarts.
 #secret_key: my_very_top_secret_key123
 
+# Lifetime of user sessions and API tokens in seconds, default 12 hours.
+#session_lifetime: 43200
+
+# Whether the session cookie gets the "Secure" flag. If unset, it is derived from the request scheme.
+# Set this to true when running behind a TLS-terminating reverse proxy.
+#session_cookie_secure: true
+
 # Regular expression to extract board name and revision from RAUC compatible string.
 # HW revision support is disabled by default when using RAUC.
 # By uncommenting the following line, the last part of the compatible string, separated by a hyphen, will be

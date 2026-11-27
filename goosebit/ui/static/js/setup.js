@@ -32,8 +32,7 @@ async function setup() {
             return;
         }
 
-        const tokenData = await response.json();
-        document.cookie = `session_id=${tokenData.access_token}; path=/`;
+        // the session cookie is set by the server (HttpOnly)
         window.location.assign("/");
     } catch (e) {
         console.error(e);
