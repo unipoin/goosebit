@@ -9,6 +9,7 @@ from tortoise.queryset import QuerySet
 
 from goosebit.db.models import UpdateModeEnum, UpdateStateEnum
 from goosebit.schema.devices import DeviceSchema
+from goosebit.ui.bff.common.columns import DeviceColumns, orderable_names, searchable_names
 from goosebit.ui.bff.common.requests import DataTableRequest
 
 # Integer-enum columns displayed as text: search the term against the enum names, not the column.
@@ -35,6 +36,7 @@ class BFFDeviceResponse(BaseModel):
     async def convert(
         cls, dt_query: DataTableRequest, query: QuerySet[Any], search_filter: Callable[[str], Any]
     ) -> "BFFDeviceResponse":
+        dt_query = dt_query.restricted(searchable_names(DeviceColumns), orderable_names(DeviceColumns))
         total_records = await query.count()
         if dt_query.search.value:
             query = query.filter(search_filter(dt_query.search.value))

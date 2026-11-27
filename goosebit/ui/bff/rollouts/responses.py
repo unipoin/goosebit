@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from tortoise.queryset import QuerySet
 
 from goosebit.schema.rollouts import RolloutSchema
+from goosebit.ui.bff.common.columns import RolloutColumns, orderable_names, searchable_names
 from goosebit.ui.bff.common.requests import DataTableRequest
 
 
@@ -17,6 +18,7 @@ class BFFRolloutsResponse(BaseModel):
     async def convert(
         cls, dt_query: DataTableRequest, query: QuerySet[Any], search_filter: Callable[[str], Any]
     ) -> "BFFRolloutsResponse":
+        dt_query = dt_query.restricted(searchable_names(RolloutColumns), orderable_names(RolloutColumns))
         total_records = await query.count()
         if dt_query.search.value:
             query = query.filter(search_filter(dt_query.search.value))

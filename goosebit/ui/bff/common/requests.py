@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Iterable
 
 from pydantic import BaseModel, BeforeValidator, Field, computed_field
 from tortoise.expressions import Q
@@ -73,3 +73,20 @@ class DataTableRequest(BaseModel):
             return f"{self.order[0].direction}{self.order[0].name}"
         except LookupError:
             return None
+
+    def restricted(self, searchable: Iterable[str], orderable: Iterable[str]) -> DataTableRequest:
+        """Return a copy that only filters and orders by the given column names.
+
+        Column and order names are sent by the client and are used as ORM field paths, which can traverse
+        relations (e.g. "compatibility__devices__auth_token"). Only names defined by the table columns are
+        allowed, everything else is ignored.
+        """
+        searchable_names = set(searchable)
+        orderable_names = set(orderable)
+
+        request = self.model_copy(deep=True)
+        for column in request.columns:
+            if column.name not in searchable_names:
+                column.search = DataTableColumnSearchSchema()
+        request.order = [order for order in request.order if order.name in orderable_names]
+        return request

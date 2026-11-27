@@ -6,6 +6,7 @@ from tortoise.queryset import QuerySet
 
 from goosebit.schema.software import SoftwareSchema
 
+from ..common.columns import SoftwareColumns, orderable_names, searchable_names
 from ..common.requests import DataTableOrderDirection, DataTableRequest
 
 
@@ -23,6 +24,7 @@ class BFFSoftwareResponse(BaseModel):
         search_filter: Callable[[str], Any],
         alt_filter: Q | None = None,
     ) -> "BFFSoftwareResponse":
+        dt_query = dt_query.restricted(searchable_names(SoftwareColumns), orderable_names(SoftwareColumns))
         total_records = await query.count()
 
         if alt_filter is not None:

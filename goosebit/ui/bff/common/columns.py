@@ -216,3 +216,15 @@ class SettingsUsersColumns:
         title="Permissions",
         data="permissions",
     )
+
+
+def _column_descriptions(columns: type) -> list[DTColumnDescription]:
+    return [value for value in vars(columns).values() if isinstance(value, DTColumnDescription)]
+
+
+def searchable_names(columns: type) -> set[str]:
+    return {c.name for c in _column_descriptions(columns) if c.name and c.searchable}
+
+
+def orderable_names(columns: type) -> set[str]:
+    return {c.name for c in _column_descriptions(columns) if c.name and c.orderable}
