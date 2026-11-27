@@ -57,7 +57,13 @@ def wait_for_service(url: str, timeout_seconds: int = 120) -> Tuple[bool, str]:
 
 def auth_token(client: httpx.Client) -> str:
     creds = {"username": "admin@goosebit.local", "password": "admin"}
-    setup_resp = client.post("/setup", data=creds, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    # once a user exists, /setup redirects to the login page; do not follow, fall back to login instead
+    setup_resp = client.post(
+        "/setup",
+        data=creds,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
     if setup_resp.status_code == 200:
         return str(setup_resp.json()["access_token"])
     login_resp = client.post("/login", data=creds, headers={"Content-Type": "application/x-www-form-urlencoded"})

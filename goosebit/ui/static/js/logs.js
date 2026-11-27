@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    const res = await get_request(`/ui/bff/devices/${device}/log`);
+    const res = await get_request(`/ui/bff/devices/${encodeURIComponent(device)}/log`);
 
     const logElem = document.getElementById("device-log");
     logElem.textContent = res.log;

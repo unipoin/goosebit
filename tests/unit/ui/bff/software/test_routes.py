@@ -74,3 +74,36 @@ async def test_list_software_version_desc(async_client: AsyncClient, test_data: 
     assert software[0]["version"] == test_data["software_release"].version
     assert software[1]["version"] == test_data["software_rc"].version
     assert software[2]["version"] == test_data["software_beta"].version
+
+
+@pytest.mark.asyncio
+async def test_list_software_ignores_unknown_column_filter(
+    async_client: AsyncClient, test_data: dict[str, Any]
+) -> None:
+    # column names are used as ORM paths; relations to other tables must not be filterable
+    params = {
+        "columns[0][data]": "name",
+        "columns[0][name]": "compatibility__devices__auth_token",
+        "columns[0][search][value]": "no-such-token",
+    }
+    response = await async_client.get("/ui/bff/software", params=params)
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["recordsTotal"] == result["recordsFiltered"] == 3
+
+
+@pytest.mark.asyncio
+async def test_list_software_known_column_filter(async_client: AsyncClient, test_data: dict[str, Any]) -> None:
+    params = {
+        "columns[0][data]": "version",
+        "columns[0][name]": "version",
+        "columns[0][search][value]": "beta",
+    }
+    response = await async_client.get("/ui/bff/software", params=params)
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["recordsTotal"] == 3
+    assert result["recordsFiltered"] == 1
+    assert [row["id"] for row in result["data"]] == [test_data["software_beta"].id]

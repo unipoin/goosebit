@@ -12,7 +12,12 @@ def attach_permissions_comparison(_: Request) -> dict[str, Any]:
     return {"compare_permissions": check_permissions}
 
 
-env = jinja2.Environment(loader=jinja2.ChoiceLoader([jinja2.FileSystemLoader(str(Path(__file__).resolve().parent))]))
+# Autoescaping must be enabled explicitly: a custom Environment does not inherit Starlette's default,
+# and templates render values that are controlled by devices and users.
+env = jinja2.Environment(
+    loader=jinja2.ChoiceLoader([jinja2.FileSystemLoader(str(Path(__file__).resolve().parent))]),
+    autoescape=True,
+)
 templates = Jinja2Templates(context_processors=[attach_permissions_comparison], env=env)
 
 

@@ -108,7 +108,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 targets: "_all",
                 searchable: false,
                 orderable: false,
-                render: (data) => data || "-",
+                render: renderText,
             },
         ],
         columns: columnConfig.columns,

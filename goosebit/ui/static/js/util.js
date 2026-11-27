@@ -4,6 +4,26 @@ DataTable.type("date", "className", "");
 DataTable.type("datetime", "className", "");
 DataTable.defaults.lengthMenu = [10, 25, 50, 100, { label: "All", value: -1 }];
 
+// Escape a value for insertion into HTML. DataTables and innerHTML do not escape on their own, and many
+// displayed values (device id, name, versions, hardware) are controlled by devices or users.
+function escapeHtml(value) {
+    if (value === null || value === undefined) {
+        return "";
+    }
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
+// Default DataTables renderer: plain text with "-" as placeholder, escaped only for display
+function renderText(data, type) {
+    const value = data || "-";
+    return type === "display" ? escapeHtml(value) : value;
+}
+
 function secondsToRecentDate(t) {
     if (t == null) {
         return null;
@@ -95,7 +115,8 @@ async function get_request(url) {
             });
         }
 
-        throw new Error(`GET ${url} failed for ${JSON.stringify(object)}`);
+        // do not include the request body: it may contain credentials (e.g. user passwords)
+        throw new Error(`GET ${url} failed with status ${response.status}`);
     }
     return result;
 }
@@ -118,7 +139,8 @@ async function post_request(url, object) {
             });
         }
 
-        throw new Error(`POST ${url} failed for ${JSON.stringify(object)}`);
+        // do not include the request body: it may contain credentials (e.g. user passwords)
+        throw new Error(`POST ${url} failed with status ${response.status}`);
     }
 }
 async function put_request(url, object) {
@@ -140,7 +162,8 @@ async function put_request(url, object) {
             });
         }
 
-        throw new Error(`PUT ${url} failed for ${JSON.stringify(object)}`);
+        // do not include the request body: it may contain credentials (e.g. user passwords)
+        throw new Error(`PUT ${url} failed with status ${response.status}`);
     }
 }
 async function patch_request(url, object) {
@@ -162,7 +185,8 @@ async function patch_request(url, object) {
             });
         }
 
-        throw new Error(`PATCH ${url} failed for ${JSON.stringify(object)}`);
+        // do not include the request body: it may contain credentials (e.g. user passwords)
+        throw new Error(`PATCH ${url} failed with status ${response.status}`);
     }
 }
 async function delete_request(url, object) {
@@ -184,7 +208,8 @@ async function delete_request(url, object) {
             });
         }
 
-        throw new Error(`DELETE ${url} failed for ${JSON.stringify(object)}`);
+        // do not include the request body: it may contain credentials (e.g. user passwords)
+        throw new Error(`DELETE ${url} failed with status ${response.status}`);
     }
 }
 function createColumnFooter() {

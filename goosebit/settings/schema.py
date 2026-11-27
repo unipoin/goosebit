@@ -86,6 +86,12 @@ class GooseBitSettings(BaseSettings):
 
     secret_key: OctKey = Field(default_factory=OctKey.generate_key)
 
+    # Lifetime of user sessions / API tokens in seconds
+    session_lifetime: int = Field(default=12 * 60 * 60, gt=0)
+    # Set the "Secure" flag on the session cookie. None derives it from the request scheme, which is "http"
+    # behind a TLS-terminating proxy unless forwarded headers are trusted, so set it explicitly there.
+    session_cookie_secure: bool | None = None
+
     plugins: list[str] = Field(default_factory=list)
 
     db_uri: str = f"sqlite:///{GOOSEBIT_ROOT_DIR.joinpath('db.sqlite3')}"

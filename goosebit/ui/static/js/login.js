@@ -23,8 +23,7 @@ async function login() {
             return;
         }
 
-        const tokenData = await response.json();
-        document.cookie = `session_id=${tokenData.access_token}; path=/`;
+        // the session cookie is set by the server (HttpOnly)
         location.reload();
     } catch (error) {
         errorContainer.textContent = "Network error. Please try again.";

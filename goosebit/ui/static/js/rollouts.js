@@ -10,9 +10,10 @@ const renderFunctions = {
             return acc;
         }, {});
 
-        return Object.entries(result)
+        const text = Object.entries(result)
             .map(([model, revision]) => `${model} - ${revision.join(", ")}`)
             .join("\n");
+        return type === "display" ? escapeHtml(text) : text;
     },
     paused: (data, type) => {
         if (type === "display") {
@@ -104,7 +105,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 targets: "_all",
                 searchable: false,
                 orderable: false,
-                render: (data) => data || "-",
+                render: renderText,
             },
         ],
         columns: columnConfig.columns,

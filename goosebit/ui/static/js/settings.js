@@ -13,7 +13,8 @@ const renderFunctions = {
         return data;
     },
     permissions: (data, type) => {
-        return data.join(",");
+        const text = data.join(",");
+        return type === "display" ? escapeHtml(text) : text;
     },
 };
 
@@ -121,7 +122,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 targets: "_all",
                 searchable: false,
                 orderable: false,
-                render: (data) => data || "-",
+                render: renderText,
             },
         ],
         columns: columnConfig.columns,
