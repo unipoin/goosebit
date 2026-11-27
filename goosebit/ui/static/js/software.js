@@ -22,9 +22,10 @@ const renderFunctions = {
             return acc;
         }, {});
 
-        return Object.entries(result)
+        const text = Object.entries(result)
             .map(([model, revision]) => `${model} - ${revision.join(", ")}`)
             .join("\n");
+        return type === "display" ? escapeHtml(text) : text;
     },
     size: (data, type) => {
         if (type === "display" || type === "filter") {
@@ -145,7 +146,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 targets: "_all",
                 searchable: false,
                 orderable: false,
-                render: (data) => data || "-",
+                render: renderText,
             },
         ],
         columns: columnConfig.columns,
@@ -219,7 +220,7 @@ async function sendFileChunks(file) {
             if (response.status >= 400 && response.status < 500) {
                 const result = await response.json();
                 alerts.innerHTML = `<div class="alert alert-warning alert-dismissible fade show" role="alert">
-                    ${result.detail}
+                    ${escapeHtml(typeof result.detail === "string" ? result.detail : JSON.stringify(result.detail))}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>`;
             }
@@ -264,7 +265,7 @@ async function sendFileUrl(url) {
         if (response.status >= 400 && response.status < 500) {
             const result = await response.json();
             alerts.innerHTML = `<div class="alert alert-warning alert-dismissible fade show" role="alert">
-                ${result.detail}
+                ${escapeHtml(typeof result.detail === "string" ? result.detail : JSON.stringify(result.detail))}
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>`;
         }
