@@ -18,7 +18,10 @@ WORKDIR /src
 # Export first so the layer is cached as long as the lock file is unchanged.
 # Fails if poetry.lock does not match pyproject.toml.
 COPY pyproject.toml poetry.lock ./
-RUN poetry export --only main --extras postgresql \
+# Path dependencies of the plugin groups must exist, even though they are not exported
+COPY plugins ./plugins
+RUN mkdir -p /out && \
+    poetry export --only main --extras postgresql \
         --format requirements.txt --output /out/requirements.txt
 
 COPY . .
