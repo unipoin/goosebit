@@ -1,0 +1,83 @@
+name: Automatic Build and Publish (unipoin)
+run-name: Build and Publish goosebit Image
+
+# Builds the image for every published GitHub release (x.y.z-unipoin.N prereleases),
+# builds without pushing for pull requests, and can be started manually on a tag.
+on:
+  workflow_dispatch:
+  release:
+    # 'published' also fires for prereleases, do NOT change this to 'released'
+    types:
+      - 'published'
+  pull_request:
+    branches:
+      - 'master'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push-image:
+    name: Build and Publish Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Records which upstream version the fork is based on
+      - name: Read upstream base version
+        id: base
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          # Prereleases only get {{version}}; 'latest' and 'major.minor' are reserved for final releases
+          flavor: |
+            latest=auto
+          tags: |
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.base.version=${{ steps.base.outputs.version }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to the Container registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/unipoin.dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          # Minimal provenance: no build arguments or event payload in the published attestation
+          provenance: mode=min
+          sbom: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

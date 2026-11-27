@@ -1,0 +1,13 @@
+# Build tooling for docker/unipoin.dockerfile (builder stage) and the unit
+# test job in .github/workflows/unipoin-release.yml.
+# Compile into requirements-build.txt WITH hashes. Resolve on Linux with the
+# image's Python, otherwise Linux-only dependencies (e.g. of keyring) are
+# missing and the hash check fails. From the repository root:
+#   cutoff=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+#   docker run --rm -v "$PWD":/src -w /src -e cutoff="$cutoff" \
+#     python:3.13.7-alpine@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844 \
+#     sh -c 'pip install -q -U "pip>=26" && pip install -q --uploaded-prior-to "$cutoff" "pip-tools>=7.6" &&
+#            pip-compile -q --generate-hashes --strip-extras --uploaded-prior-to "$cutoff" \
+#              -o .github/unipoin/requirements-build.txt .github/unipoin/requirements-build.in'
+poetry==2.5.1
+poetry-plugin-export==1.10.1

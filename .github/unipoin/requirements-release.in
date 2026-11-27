@@ -1,0 +1,6 @@
+# Release tooling for .github/workflows/unipoin-release.yml.
+# Compile into requirements-release.txt WITH hashes, the workflow installs
+# with --require-hashes:
+#   uv pip compile --generate-hashes --universal --python-version 3.13 \
+#     .github/unipoin/requirements-release.in -o .github/unipoin/requirements-release.txt
+python-semantic-release==10.7.0

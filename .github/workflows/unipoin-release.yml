@@ -1,0 +1,130 @@
+name: Automatic Release (unipoin)
+run-name: ${{ github.actor }} is automatically releasing 🚀
+
+# Calculates the next prerelease version (x.y.z-unipoin.N) with python-semantic-release
+# and publishes a GitHub prerelease. The published release triggers
+# unipoin-build-and-push-image.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Force a bump even without releasable commits (e.g. after an upstream sync)
+        type: choice
+        options:
+          - ''
+          - patch
+          - minor
+        default: ''
+  push:
+    branches:
+      - master
+
+# Nothing by default, each job grants only what it needs
+permissions: {}
+
+# Queue instead of cancelling, so a release that already created a tag is never aborted halfway
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Unit tests
+    # Guards workflow_dispatch on other branches
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+
+      # Same hashed tooling as the image build
+      - name: Install poetry
+        run: pip install --no-cache-dir --require-hashes -r .github/unipoin/requirements-build.txt
+
+      - name: Install dependencies
+        run: poetry install --with tests
+
+      - name: Run unit tests
+        run: poetry run pytest tests/unit
+
+  release:
+    name: Release
+    needs: [check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Get token from GitHub App
+        id: release_app_token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ secrets.CREATE_RELEASE_GITHUB_APP_ID }}
+          private-key: ${{ secrets.CREATE_RELEASE_GITHUB_APP_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Token is limited to this repository only
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # "Sync fork" does not copy tags. Without upstream's release tags the
+      # version would be calculated from an outdated base.
+      - name: Fetch upstream release tags
+        run: git fetch --quiet https://github.com/UpstreamDataInc/goosebit 'refs/tags/v*:refs/tags/v*'
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+
+      # Reproducible install, every package is checked against its hash
+      - name: Install release tooling
+        run: pip install --no-cache-dir --require-hashes -r .github/unipoin/requirements-release.txt
+
+      - name: Calculate next version
+        id: version
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          args=()
+          if [ -n "$FORCE" ]; then
+            args+=("--$FORCE" --as-prerelease)
+          fi
+          tag=$(semantic-release -c .github/unipoin/semantic-release.toml version --print-tag "${args[@]}" | tail -n 1)
+          # Without releasable commits the latest existing tag is printed again
+          if git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null; then
+            echo "No releasable changes since $tag, nothing to do"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "Next release: $tag"
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The app token (not GITHUB_TOKEN) is required, otherwise the
+      # 'release: published' event does not trigger the build workflow
+      - name: Create GitHub prerelease
+        if: steps.version.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ steps.release_app_token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --prerelease \
+            --generate-notes

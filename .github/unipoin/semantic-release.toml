@@ -1,0 +1,18 @@
+# python-semantic-release config for the unipoin fork.
+# Kept outside pyproject.toml so syncing with upstream never conflicts.
+# Only used to CALCULATE the next version ("version --print"); tags and
+# GitHub releases are created by the workflow, no files are changed.
+
+[semantic_release]
+tag_format = "v{version}"
+commit_parser = "conventional"
+allow_zero_version = true
+# Stay on 0.x like upstream, breaking changes bump the minor version
+major_on_zero = false
+
+# Every release of the fork is a prerelease of the next upstream version,
+# e.g. 0.2.12 (upstream) + fix commit -> 0.2.13-unipoin.1
+[semantic_release.branches.unipoin]
+match = "^master$"
+prerelease = true
+prerelease_token = "unipoin"
