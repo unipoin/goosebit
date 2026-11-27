@@ -1,4 +1,14 @@
-from goosebit.ui.bff.common.columns import DeviceColumns, orderable_names, searchable_names
+import pytest
+
+from goosebit.ui.bff.common.columns import (
+    DeviceColumns,
+    RolloutColumns,
+    SettingsUsersColumns,
+    SoftwareColumns,
+    orderable_names,
+    searchable_names,
+)
+from goosebit.ui.bff.common.responses import DTColumnDescription
 from goosebit.ui.bff.common.requests import DataTableRequest
 
 
@@ -39,3 +49,11 @@ def test_device_column_names() -> None:
     assert "hardware__model" in searchable_names(DeviceColumns)
     assert "auth_token" not in searchable_names(DeviceColumns)
     assert "last_seen" in orderable_names(DeviceColumns)
+
+
+@pytest.mark.parametrize("columns", [DeviceColumns, RolloutColumns, SettingsUsersColumns, SoftwareColumns])
+def test_searchable_and_orderable_columns_have_names(columns: type) -> None:
+    # columns without a name are silently ignored by DataTableRequest.restricted()
+    for attribute, column in vars(columns).items():
+        if isinstance(column, DTColumnDescription) and (column.searchable or column.orderable):
+            assert column.name, f"{columns.__name__}.{attribute} is searchable/orderable but has no name"

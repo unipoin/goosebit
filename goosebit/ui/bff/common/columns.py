@@ -204,12 +204,14 @@ class SettingsUsersColumns:
     username = DTColumnDescription(
         title="Username",
         data="username",
+        name="username",
         searchable=True,
         orderable=True,
     )
     enabled = DTColumnDescription(
         title="Enabled",
         data="enabled",
+        name="enabled",
         orderable=True,
     )
     permissions = DTColumnDescription(
